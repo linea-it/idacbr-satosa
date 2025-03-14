@@ -792,7 +792,7 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
             return super().process(context, data)
 
         user.co_manage_user["COmanageUID"] = comanage_user.uid
-        user.co_manage_user["COmanageUserActive"] = True
+        user.co_manage_user["COmanageUserActive"] = comanage_user.is_active
 
         try:
             user_groups = self.register_groups(
