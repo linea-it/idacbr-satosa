@@ -1,0 +1,10 @@
+module: comanage_account_linking.COmanageAccountLinkingMicroService
+name: COmanageAccountLinking
+config:
+  api_url:
+  redirect_url:
+  api_user:
+  password:
+  target_backends:
+    - "rubin_oidc"
+  co_id:
