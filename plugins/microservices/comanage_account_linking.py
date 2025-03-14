@@ -1,11 +1,10 @@
 from satosa.micro_services.base import ResponseMicroService
 from satosa.context import Context
-from satosa.response import Redirect
 import requests
 import logging
 from urllib.parse import urljoin
-from typing import Optional, Dict, Any, List, Union, Tuple, Type, NoReturn
-from dataclasses import dataclass
+from typing import Optional, Dict, Any, List, Union, NoReturn
+from dataclasses import dataclass, field
 from time import sleep
 from functools import lru_cache
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -42,7 +41,7 @@ class COmanageAccountLinkingError(Exception):
     pass
 
 
-class COmanageUserError(Exception):
+class COmanageUserNotActiveError(Exception):
     """Custom exception for COmanage user errors"""
     pass 
 
@@ -188,7 +187,7 @@ class COmanageAPI:
             Optional[Dict[str, Any]]: The first organizational identity link found, or None if no link exists.
     
         Raises:
-            Exception: If no organizational identities are found for the given identifier.
+            COmanageAPIError: If no organizational identities are found for the given identifier.
         """        
         result = self.get_request(
             "registry/org_identities.json",
@@ -198,7 +197,7 @@ class COmanageAPI:
         org_identities = result["OrgIdentities"]
 
         if len(org_identities) == 0:
-            raise Exception(
+            raise COmanageAPIError(
                 f"get_org_identities should return one or more results but returned {len(org_identities)}"
             )
 
@@ -307,14 +306,14 @@ class COmanageAPI:
             int or None: The COmanage person ID if found, otherwise None.
 
         Raises:
-            Exception: If no identity links are found for the given identifier.
+            COmanageAPIError: If no identity links are found for the given identifier.
         """
         org_identity = self.get_org_identity_by_identifier(identifier)
 
         identity_links = org_identity["CoOrgIdentityLinks"]
 
         if len(identity_links) == 0:
-            raise Exception(
+            raise COmanageAPIError(
                 f"get_co_org_identity_links should return one or more results but returned {len(identity_links)}"
             )
         
@@ -561,7 +560,7 @@ class COmanageUser:
         - Validates user existence and active status during initialization
     
     Raises:
-        COmanageUserError: If the user is not active or cannot be found in COmanage
+        COmanageUserNotActiveError: If the user is not active or cannot be found in COmanage
     """
     
     def __init__(self, identifier: str, api: COmanageAPI) -> NoReturn:
@@ -574,7 +573,7 @@ class COmanageUser:
     
         Raises:
             AssertionError: If no matching user is found in COmanage.
-            COmanageUserError: If the user is not in an active status.
+            COmanageUserNotActiveError: If the user is not in an active status.
     
         Notes:
             - Retrieves the user's COmanage person ID
@@ -594,7 +593,7 @@ class COmanageUser:
         self.__ldap_uid = identifier_uid.get("Identifier")
 
         if not self.is_active:
-            raise COmanageUserError(f"User {self.uid} is not active")
+            raise COmanageUserNotActiveError(f"User {self.uid} is not active")
         
         logger.debug(f"User {self.uid} is {self.__status}")
 
@@ -687,6 +686,11 @@ class UserAttributes:
     """
     edu_person_unique_id: str
     is_member_of: list[str]
+    co_manage_user: Dict[str, any] = field(default_factory=lambda: {
+        "COmanageUID": "",
+        "COmanageUserActive": False,
+        "COmanageGroups": ""
+    })
 
     @classmethod
     def from_data(cls, data: dict) -> "UserAttributes":
@@ -701,7 +705,7 @@ class UserAttributes:
         Returns:
             UserAttributes: An instance of UserAttributes with extracted unique ID and group memberships.
         """
-        attributes = data.get("attributes", {})
+        attributes = data.attributes
         return cls(
             edu_person_unique_id=attributes.get("eduPersonUniqueId", [""])[0],
             is_member_of=attributes.get("isMemberOf", [""])[0].split()
@@ -740,7 +744,7 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         self.target_backends = config.get("target_backends", [])
         self.backend = None
 
-    def process(self, context: Context, data: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, context: Context, data) -> Dict[str, Any]:
         """
         Process an authentication request for COmanage account linking.
     
@@ -764,30 +768,43 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
 
         self.backend = context.target_backend
 
-        if not self.backend in self.target_backends:
-            return super().process(context, data)
-
         user = UserAttributes.from_data(data)
+
+        if not self.backend in self.target_backends:
+            logger.info(f"Backend {self.backend} not in target backends")
+            data.attributes.update(user.co_manage_user)
+            return super().process(context, data)
 
         try: 
             comanage_user = COmanageUser(user.edu_person_unique_id, self.api)
-            logger.debug(f"COmanage user: {comanage_user}")
+            logger.info(f"COmanage user: {comanage_user}")
         except AssertionError as err:
-            logger.error(f"Redirecting to register page: {err}")
-            return Redirect(self.api.config.redirect_url) 
+            logger.warning(err)
+            data.attributes.update(user.co_manage_user)
+            return super().process(context, data)
+        except COmanageUserNotActiveError as err:
+            logger.warning(err)
+            data.attributes.update(user.co_manage_user)
+            return super().process(context, data)
+        except COmanageAPIError as err:
+            logger.error(err)
+            data.attributes.update(user.co_manage_user)
+            return super().process(context, data)
+
+        user.co_manage_user["COmanageUID"] = comanage_user.uid
+        user.co_manage_user["COmanageUserActive"] = True
 
         try:
             user_groups = self.register_groups(
                 idp_groups=user.is_member_of,
                 comanage_user=comanage_user
             )
-
-            data["COmanageGroups"] = [" ".join(list(user_groups.keys()))]
-
-            return super().process(context, data)
-        except COmanageAccountLinkingError as err:
-            logger.error("Account linking failed: %s", str(err))
-            return self._error_response(context, str(err))
+            user.co_manage_user["COmanageGroups"] = " ".join(list(user_groups.keys()))
+        except COmanageGroupsError as err:
+            logger.error(err)
+        
+        data.attributes.update(user.co_manage_user)
+        return super().process(context, data)
 
     def register_groups(self, idp_groups: List[str], comanage_user: COmanageUser) -> Dict[str, Any]:
         """
@@ -897,13 +914,17 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
         config = config["config"]
     
+
     # Setup mock data with command line arguments
-    data = {
-        "attributes": {
-            "eduPersonUniqueId": [args.edu_person_unique_id],
-            "isMemberOf": [args.is_member_of]
-        }
-    }
+    @dataclass
+    class Data:
+        attributes: Dict[str, List[str]]
+
+
+    data = Data(attributes = {
+        "eduPersonUniqueId": [args.edu_person_unique_id],
+        "isMemberOf": [args.is_member_of]
+    })
 
     # Mock context
     context = Context()
