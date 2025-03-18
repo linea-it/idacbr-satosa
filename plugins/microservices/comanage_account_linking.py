@@ -1,4 +1,5 @@
 from satosa.micro_services.base import ResponseMicroService
+from satosa.exception import SATOSAAuthenticationError
 from satosa.context import Context
 import requests
 import logging
@@ -7,7 +8,7 @@ from typing import Optional, Dict, Any, List, Union, NoReturn
 from dataclasses import dataclass, field
 from time import sleep
 from functools import lru_cache
-from tenacity import retry, stop_after_attempt, wait_exponential
+# from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,12 @@ class COmanageConfig:
         api_user (str): Username for API authentication
         password (str): Password for API authentication
         co_id (str): Identifier for the COmanage organization
-        redirect_url (str): URL to redirect register page
         target_backends (List[str]): List of backend systems to target
     """
     api_url: str
     api_user: str
     password: str
     co_id: str
-    redirect_url: str
     target_backends: List[str]
 
 
@@ -88,7 +87,7 @@ class COmanageAPI:
             'Accept': 'application/json'
         })
     
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    # @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def get_request(self, endpoint: str, params: Dict[str, Any]) -> Union[Dict[str, Any], str]:
         """
         Perform a GET request to the specified COmanage Registry API endpoint.
@@ -313,9 +312,10 @@ class COmanageAPI:
         identity_links = org_identity["CoOrgIdentityLinks"]
 
         if len(identity_links) == 0:
-            raise COmanageAPIError(
+            logger.warning(
                 f"get_co_org_identity_links should return one or more results but returned {len(identity_links)}"
             )
+            return None
         
         identities = [dict(t) for t in {tuple(l.items()) for l in identity_links}]
 
@@ -600,6 +600,10 @@ class COmanageUser:
     @property
     def is_active(self) -> bool:
         return self.__status == "Active"
+
+    @property
+    def status(self) -> str:
+        return self.__status
     
     @property
     def uid(self) -> str:
@@ -688,8 +692,8 @@ class UserAttributes:
     is_member_of: list[str]
     co_manage_user: Dict[str, any] = field(default_factory=lambda: {
         "COmanageUID": "",
-        "COmanageUserActive": False,
-        "COmanageGroups": ""
+        "COmanageUserStatus": "",
+        "COmanageGroups": []
     })
 
     @classmethod
@@ -782,24 +786,23 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
             logger.warning(err)
             data.attributes.update(user.co_manage_user)
             return super().process(context, data)
-        except COmanageUserNotActiveError as err:
+        except COmanageAPIError as err:
             logger.warning(err)
             data.attributes.update(user.co_manage_user)
             return super().process(context, data)
-        except COmanageAPIError as err:
+        except COmanageUserNotActiveError as err:
             logger.error(err)
-            data.attributes.update(user.co_manage_user)
-            return super().process(context, data)
+            return SATOSAAuthenticationError(context.state, err)
 
         user.co_manage_user["COmanageUID"] = comanage_user.uid
-        user.co_manage_user["COmanageUserActive"] = comanage_user.is_active
+        user.co_manage_user["COmanageUserStatus"] = comanage_user.status
 
         try:
             user_groups = self.register_groups(
                 idp_groups=user.is_member_of,
                 comanage_user=comanage_user
             )
-            user.co_manage_user["COmanageGroups"] = " ".join(list(user_groups.keys()))
+            user.co_manage_user["COmanageGroups"] = list(user_groups.keys())
         except COmanageGroupsError as err:
             logger.error(err)
         
