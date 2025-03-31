@@ -5,5 +5,6 @@ config:
   api_user:
   password:
   target_backends:
-    - "rubin_oidc"
+    - name: "rubin_oidc"
+      prefix: "lsst"
   co_id:
