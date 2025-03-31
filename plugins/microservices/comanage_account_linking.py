@@ -26,13 +26,13 @@ class COmanageConfig:
         api_user (str): Username for API authentication
         password (str): Password for API authentication
         co_id (str): Identifier for the COmanage organization
-        target_backends (List[str]): List of backend systems to target
+        target_backends (List[Dict]): List of backend systems to target
     """
     api_url: str
     api_user: str
     password: str
     co_id: str
-    target_backends: List[str]
+    target_backends: List[Dict]
 
 
 class COmanageAccountLinkingError(Exception):
@@ -428,20 +428,20 @@ class COmanageGroups:
         idp_groups (Dict[str, Dict[str, Any]]): Cached groups filtered by identity provider.
     """
     
-    def __init__(self, api: COmanageAPI, backend: str) -> NoReturn:
+    def __init__(self, api: COmanageAPI, prefix: str) -> NoReturn:
         """ 
         Initialize a COmanageGroups instance.
 
         Args:
             api (COmanageAPI): The COmanage API client for performing group operations.
-            backend (str): The identity provider backend to filter groups.
+            prefix (str): The prefix to filter groups.
 
         Initializes the instance with the provided API client and retrieves
         groups filtered by the specified backend.
         """
 
         self.__api = api
-        self.__idp_groups = self.__get_idp_groups(backend)
+        self.__idp_groups = self.__get_idp_groups(prefix)
 
     @property
     def idp_groups(self) -> Dict[str, Dict[str, Any]]:
@@ -514,19 +514,19 @@ class COmanageGroups:
                 
         self.__api.remove_group_member(co_group_member_id)
 
-    def __get_idp_groups(self, idp: str) -> Dict[str, Dict[str, any]]:
+    def __get_idp_groups(self, prefix: str) -> Dict[str, Dict[str, any]]:
         """
-        Retrieve and filter groups for a specific identity provider.
+        Retrieve and filter groups for a specific prefix group.
 
         Args:
-            idp (str): The identity provider to filter groups for.
+            prefix (str): The prefix to filter groups.
 
         Returns:
-            Dict[str, Dict[str, any]]: A dictionary of groups associated with the specified identity provider.
+            Dict[str, Dict[str, any]]: A dictionary of groups associated with the prefix group.
         """
 
         groups = self.__api.get_groups_by_co()
-        return filter_idp_groups(idp, groups)
+        return filter_idp_groups(prefix, groups)
 
     @staticmethod
     def organize_group_members(group_members: List[Dict[str, any]]) -> Dict[str, str]:
@@ -647,17 +647,17 @@ class COmanageUser:
         """
         return self.api.get_groups_by_copersonid(self.co_person_id)
 
-    def get_idp_groups(self, idp) -> List[Dict[str, any]]:
+    def get_idp_groups(self, prefix) -> List[Dict[str, any]]:
         """
         Retrieve the groups associated with a specific identity provider (IdP) for the COmanage user.
     
         Args:
-            idp: The identity provider to filter groups for.
+            prefix: The prefix to filter groups.
     
         Returns:
             List[Dict[str, any]]: A filtered list of groups that match the specified identity provider.
         """
-        return filter_idp_groups(idp, self.get_groups())
+        return filter_idp_groups(prefix, self.get_groups())
 
     def get_group_members(self) -> List[Dict[str, any]]:
         """
@@ -727,7 +727,7 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
     
     Attributes:
         api (COmanageAPI): API interface for COmanage interactions
-        target_backends (List[str]): Configured backends for account linking
+        target_backends (List[Dict]): Configured backends for account linking
         backend (str): Current target backend being processed
     """
     
@@ -774,10 +774,12 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
 
         user = UserAttributes.from_data(data)
 
-        if not self.backend in self.target_backends:
+        if not self.backend in [item["name"] for item in self.target_backends]:
             logger.info(f"Backend {self.backend} not in target backends")
             data.attributes.update(user.co_manage_user)
             return super().process(context, data)
+        
+        self.group_prefix = self.__get_group_prefix(self.backend, self.target_backends)
 
         try: 
             comanage_user = COmanageUser(user.edu_person_unique_id, self.api)
@@ -809,6 +811,22 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         data.attributes.update(user.co_manage_user)
         return super().process(context, data)
 
+    def __get_group_prefix(self, backend_name: str, target_backends: List[Dict[str, Any]]) -> str:
+        """
+        Get the group prefix for a specific backend.
+
+        Args:
+            backend_name (str): The name of the backend.
+            target_backends (List[Dict[str, Any]]): List of configured backends.
+
+        Returns:
+            str: The group prefix for the backend.
+        """
+        for backend in target_backends:
+            if backend["name"] == backend_name:
+                return backend.get("prefix", backend_name)
+        return backend_name
+
     def register_groups(self, idp_groups: List[str], comanage_user: COmanageUser) -> Dict[str, Any]:
         """
         Synchronize groups for a COmanage user across an identity provider and COmanage.
@@ -824,12 +842,12 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         Returns:
             Dict[str, Any]: Dictionary containing the user's group memberships.
         """
-        comanage_groups = COmanageGroups(self.api, self.backend)
+        comanage_groups = COmanageGroups(self.api, self.group_prefix)
 
         idp_groups_user = {}
 
         for group in idp_groups:
-            idp_group_name = f"{self.backend}-{group}"
+            idp_group_name = f"{self.group_prefix}_{group}"
             idp_group = comanage_groups.get_or_create_group(idp_group_name)
 
             logger.debug(f"Group {idp_group_name}: {idp_group['Id']} - {idp_group['Method']}")
@@ -861,12 +879,12 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         return idp_groups_user
 
 
-def filter_idp_groups(idp: str, groups: List[Dict[str, any]]) -> Dict[str, Dict[str, any]]:
+def filter_idp_groups(prefix: str, groups: List[Dict[str, any]]) -> Dict[str, Dict[str, any]]:
     """
     Filter groups by identity provider and group type.
     
     Args:
-        idp (str): The identity provider prefix to match against group names.
+        prefix (str): The identity provider prefix to match against group names.
         groups (List[Dict[str, any]]): A list of group dictionaries to filter.
     
     Returns:
@@ -876,7 +894,7 @@ def filter_idp_groups(idp: str, groups: List[Dict[str, any]]) -> Dict[str, Dict[
     response = {}
 
     for group in groups: 
-        if group["Name"].startswith(idp) and group["GroupType"] == "S":
+        if group["Name"].startswith(prefix) and group["GroupType"] == "S":
             response[group["Name"]] = group
 
     return response
