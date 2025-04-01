@@ -1,0 +1,42 @@
+module: cilogon.OpenIDConnectCustomBackend
+name: cilogon
+config:
+  provider_metadata:
+    issuer: https://cilogon.org
+  client:
+    verify_ssl: yes
+    auth_req_params:
+      response_type: code
+      scope: [openid, email, profile, org.cilogon.userinfo]
+      skew: 10
+    client_metadata:
+      application_name: 
+      application_type: web
+      contacts: []
+      client_id: 
+      client_secret: 
+      redirect_uris: [<base_url>/<name>]
+      subject_type: public
+  entity_info:
+    contact_person:
+      - contact_type: "technical"
+        email_address: []
+        given_name: ""
+        sur_name: ""
+      - contact_type: "support"
+        email_address: []
+        given_name: ""
+    organization:
+        display_name:
+        - ["", "en"]
+        name:
+        - ["", "se"]
+        - ["", "en"]
+        url:
+        - ["", "en"]
+        - ["", "se"]
+    ui_info:
+        description:
+        - ["", "en"]
+        display_name:
+        - ["", "en"] 
