@@ -1,5 +1,7 @@
 import logging
 from satosa.backends.openid_connect import OpenIDConnectBackend
+from datetime import datetime, timezone
+from oic.utils import time_util
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +24,7 @@ class OpenIDConnectCustomBackend(OpenIDConnectBackend):
 
         skew = self.config.get("auth_req_params", {}).get("response_type", 0)
 
-        logger.debug('-> AUTHN RESPONSE: %s', authn_response)
-        logger.debug('-> Custom skew: %s', skew)
+        logger.debug('Custom skew: %s', skew)
 
         if "code" in authn_response:
             # make token request
@@ -37,6 +38,10 @@ class OpenIDConnectCustomBackend(OpenIDConnectBackend):
                                                              authn_method=self.client.registration_response[
                                                                  "token_endpoint_auth_method"],
                                                              skew=skew)
+
+            logger.debug('EXP date: %s', str(datetime.fromtimestamp(token_resp['exp'], tz=timezone.utc)))
+            logger.debug('IAT date: %s', str(datetime.fromtimestamp(token_resp['iat'], tz=timezone.utc)))
+            logger.debug('Now date: %s', str(datetime.fromtimestamp(time_util.utc_time_sans_frac(), tz=timezone.utc)))
 
             self._check_error_response(token_resp, context)
             return token_resp["access_token"], token_resp["id_token"]
