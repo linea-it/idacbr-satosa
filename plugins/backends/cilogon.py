@@ -22,7 +22,7 @@ class OpenIDConnectCustomBackend(OpenIDConnectBackend):
         :rtype: Tuple[Optional[str], Optional[Mapping[str, str]]]
         """
 
-        skew = self.config.get("auth_req_params", {}).get("response_type", 0)
+        skew = self.config.get("auth_req_params", {}).get("skew", 0)
 
         logger.debug('Custom skew: %s', skew)
 
