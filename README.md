@@ -13,21 +13,6 @@ This plugin enables account linking between identity providers and COmanage Regi
 cp plugins/microservices/comanage_account_linking.py /path/to/satosa/plugins/microservices/
 ```
 
-## Dependencies
-
-Add these requirements to your `requirements.txt`:
-
-```text:requirements.txt
-requests>=2.28.0
-tenacity>=8.0.1
-```
-
-Install the dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
 ## Configuration
 
 1. Add the microservice configuration to your SATOSA proxy configuration file:
@@ -41,8 +26,9 @@ MICRO_SERVICES:
       api_user: "api_username"
       password: "api_password"
       target_backends:
-        - "oidc"
-        - "saml2"
+        - name: "oidc"
+        - name: "saml2"
+          prefix: "custom_saml2"
      co_id: "2"
 ```
 
