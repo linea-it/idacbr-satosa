@@ -10,11 +10,11 @@ config:
       scope: [openid, email, profile, org.cilogon.userinfo]
       skew: 10
     client_metadata:
-      application_name: 
+      application_name:
       application_type: web
       contacts: []
-      client_id: 
-      client_secret: 
+      client_id:
+      client_secret:
       redirect_uris: [<base_url>/<name>]
       subject_type: public
   entity_info:
@@ -30,13 +30,11 @@ config:
         display_name:
         - ["", "en"]
         name:
-        - ["", "se"]
         - ["", "en"]
         url:
         - ["", "en"]
-        - ["", "se"]
     ui_info:
         description:
         - ["", "en"]
         display_name:
-        - ["", "en"] 
+        - ["", "en"]

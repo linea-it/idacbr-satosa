@@ -1,2 +1,4 @@
 tenacity
 satosa
+pytest
+pytest-mock

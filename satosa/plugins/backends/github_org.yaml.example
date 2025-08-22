@@ -1,0 +1,32 @@
+module: github_org.GitHubOrgBackend
+name: github
+config:
+  authz_page: github/auth/callback
+  base_url:
+  client_config:
+    client_id:
+  client_secret:
+  scope: ['read:user', 'read:org']
+  response_type: code
+  allow_signup: false
+  server_info: {
+    authorization_endpoint: 'http://github.com/login/oauth/authorize',
+    token_endpoint: 'https://github.com/login/oauth/access_token',
+    user_info: 'https://api.github.com/user',
+    org: "linea-users",
+    team: "pz-server-delegates",
+    check_org_team: 'https://api.github.com/orgs/{org}/teams/{team}/memberships/{username}'
+  }
+  entity_info:
+    organization:
+      display_name:
+      - ["GitHub", "en"]
+      name:
+      - ["GitHub", "en"]
+      url:
+      - ["https://www.github.com/", "en"]
+    ui_info:
+      description:
+      - ["GitHub oauth", "en"]
+      display_name:
+      - ["GitHub", "en"]
