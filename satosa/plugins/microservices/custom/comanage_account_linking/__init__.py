@@ -45,12 +45,12 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         backend (str): Current target backend being processed
     """
 
-    def __init__(self, conf: Dict[str, Any], *args: Any, **kwargs: Any) -> NoReturn:
+    def __init__(self, config: Dict[str, Any], *args: Any, **kwargs: Any) -> NoReturn:
         """
         Initialize the COmanageAccountLinkingMicroService with configuration settings.
 
         Args:
-            conf (Dict[str, Any]): Configuration dictionary containing COmanage API settings.
+            config (Dict[str, Any]): Configuration dictionary containing COmanage API settings.
             *args (Any): Variable positional arguments to pass to the parent class constructor.
             **kwargs (Any): Variable keyword arguments to pass to the parent class constructor.
 
@@ -58,8 +58,8 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         Initializes the backend attribute to None, which will be set during processing.
         """
         super().__init__(*args, **kwargs)
-        self.api = COmanageAPI(COmanageConfig(**conf))
-        self.target_backends = conf.get("target_backends", [])
+        self.api = COmanageAPI(COmanageConfig(**config))
+        self.target_backends = config.get("target_backends", [])
 
     def process(self, context: Context, data) -> Dict[str, Any]:
         """
