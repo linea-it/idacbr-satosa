@@ -245,5 +245,5 @@ class UserAttributes:
         attributes = _data.attributes
         return cls(
             edu_person_unique_id=attributes.get("eduPersonUniqueId", [""])[0],
-            is_member_of=attributes.get("isMemberOf", [""])[0].split(","),
+            is_member_of=attributes.get("isMemberOf", [""])[0].split(),
         )

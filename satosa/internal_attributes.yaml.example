@@ -77,10 +77,10 @@ attributes:
     github: [login]
     openid: [family_name, preferred_username]
     saml: [sn, surName]
-  idpName:
-    openid: [schacProjectMembership, idpName]
-    github: [schacProjectMembership, idpName]
-    saml: [schacProjectMembership, idpName]
+  backendName:
+    openid: [schacProjectMembership]
+    github: [schacProjectMembership]
+    saml: [schacProjectMembership]
     # saml: [o]
   idp_entityID:
     openid: [idp]
@@ -115,3 +115,7 @@ attributes:
     openid: [schacUserStatus, user_status]
     github: [schacUserStatus, user_status]
     saml: [schacUserStatus]
+  COmanageLogError:
+    openid: [knowledgeInformation]
+    github: [knowledgeInformation]
+    saml: [knowledgeInformation]
