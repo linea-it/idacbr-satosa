@@ -1,12 +1,9 @@
 """This module provides utility functions"""
 
 from typing import List, Dict, Any
-import logging
-
-logger = logging.getLogger(__name__)
 
 
-def filter_idp_groups(
+def filter_groups_by_prefix(
     prefix: str, groups: List[Dict[str, any]]
 ) -> Dict[str, Dict[str, any]]:
     """
@@ -22,17 +19,9 @@ def filter_idp_groups(
     """
     response = {}
 
-    logger.info("---> GROUPS: %s", groups)
-    logger.info("---> prefix: %s", prefix)
-
     for group in groups:
-        if (
-            group["Name"].startswith(f"{prefix}_")
-            and group["GroupType"] == "S"
-        ):
+        if group["Name"].startswith(f"{prefix}_") and group["GroupType"] == "S":
             response[group["Name"]] = group
-
-    logger.info("---> idp groups: %s", response)
 
     return response
 
@@ -50,7 +39,7 @@ def filter_groups(groups: List[Dict[str, any]]) -> Dict[str, Dict[str, any]]:
     response = {}
 
     for group in groups:
-        if group["Auto"] is False and group["GroupType"] == "S":
+        if group["GroupType"] == "S":
             response[group["Name"]] = group
 
     return response

@@ -105,7 +105,6 @@ class COmanageAPI:
         """
         url = urljoin(self.config.api_url, endpoint)
         response = self.session.delete(url, params=params)
-        logger.debug("DELETE request to %s with params %s", url, params)
         return self.__handle_response(response)
 
     def __handle_response(
@@ -127,7 +126,6 @@ class COmanageAPI:
             COmanageAPIError: For JSON decoding errors, request failures, or HTTP errors
         """
         try:
-            logger.debug("Response request: %s", response.request.method)
             response.raise_for_status()
             if response.status_code == 204:
                 return None
@@ -390,9 +388,6 @@ class COmanageAPI:
             "Description": "Group added automatically",
             "Status": "Active",
         }
-
-        logger.debug("POST request to registry/co_groups.json")
-        logger.debug("Adding group with data: %s", _data)
 
         response = self.post_request("registry/co_groups.json", _data)
         _data["Id"] = response["Id"]

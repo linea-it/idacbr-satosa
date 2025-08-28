@@ -1,197 +1,153 @@
-# -*- coding: utf-8 -*-
-# This file is part of the SATOSA project.
+"""This file is part of the SATOSA project."""
 
-from unittest.mock import MagicMock, patch
+import logging
+import os
+from dataclasses import dataclass
+from typing import Dict, List
 
 import pytest
+import yaml
 from comanage_account_linking import COmanageAccountLinkingMicroService
-from comanage_account_linking.exceptions import (
-    COmanageAPIError,
-    COmanageGroupsError,
-    COmanageUserNotActiveError,
-)
+from comanage_account_linking.utils import get_backend_config
 from satosa.context import Context
-from satosa.exception import SATOSAAuthenticationError
+
+logger = logging.getLogger()
 
 
 @pytest.fixture
-def mock_comanage_api():
-    """Fixture for mocking COmanageAPI."""
-    with patch("comanage_account_linking.COmanageAPI") as mock_api:
-        yield mock_api
+def mock_context():
+    """Fixture for creating a mock Context."""
+    return Context()
 
 
 @pytest.fixture
-def mock_comanage_user():
-    """Fixture for mocking COmanageUser."""
-    with patch("comanage_account_linking.COmanageUser") as mock_user:
-        instance = mock_user.return_value
-        instance.is_active = True
-        instance.uid = "test_uid"
-        instance.status = "Active"
-        instance.co_person_id = "123"
-        instance.get_groups.return_value = {"group1": {}, "group2": {}}
-        instance.get_idp_groups.return_value = {"prefix_group1": {}}
-        instance.get_group_members.return_value = {}
-        yield mock_user
+def comanage_config():
+    """Fixture for loading COmanage configuration."""
+    config_file = os.getenv("COMANAGE_CONFIG")
+    with open(config_file, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        return config["config"]
 
 
-# @pytest.fixture
-# def mock_comanage_groups():
-#     """Fixture for mocking COmanageGroups."""
-#     with patch(
-#         "satosa.plugins.microservices.custom.comanage_account_linking.COmanageGroups"
-#     ) as mock_groups:
-#         instance = mock_groups.return_value
-#         instance.get_or_create_group.side_effect = lambda name: {
-#             "Id": name,
-#             "Method": "Created",
-#         }
-#         instance.organize_group_members.return_value = {}
-#         yield mock_groups
+@pytest.fixture
+def microservice(comanage_config) -> COmanageAccountLinkingMicroService:
+    """Fixture for initializing the microservice."""
+    config = comanage_config
+    return COmanageAccountLinkingMicroService(
+        config, name="comanage_account_linking", base_url=config.get("api_url")
+    )
 
 
-# @pytest.fixture
-# def mock_user_attributes():
-#     """Fixture for mocking UserAttributes."""
-#     with patch(
-#         "satosa.plugins.microservices.custom.comanage_account_linking.UserAttributes"
-#     ) as mock_attributes:
-#         instance = mock_attributes.from_data.return_value
-#         instance.edu_person_unique_id = "test_user"
-#         instance.is_member_of = ["group1", "group2"]
-#         instance.co_manage_user = {}
-#         yield mock_attributes
+def test_init(microservice: COmanageAccountLinkingMicroService):
+    """Test service initialization."""
+    assert microservice.api is not None
 
 
-# @pytest.fixture
-# def microservice(mock_comanage_api):
-#     """Fixture for initializing the microservice."""
-#     config = {
-#         "api_url": "https://comanage.test",
-#         "co_id": 1,
-#         "api_user": "test_user",
-#         "api_pass": "test_pass",
-#         "target_backends": [{"name": "test_backend", "prefix": "prefix"}],
-#     }
-#     service = COmanageAccountLinkingMicroService(
-#         config, name="test_service", base_url="https://satosa.test"
-#     )
-#     return service
+def test_process(
+    microservice: COmanageAccountLinkingMicroService,
+    mock_context: Context,
+    comanage_config: Dict[str, str],
+):
+    """Test process when backend is not in target backends."""
+
+    # Setup mock data with command line arguments
+    @dataclass
+    class Data:
+        """Mock data"""
+
+        attributes: Dict[str, List[str]]
+
+    edu_person_unique_id = os.getenv("EDU_PERSON_UNIQUE_ID")
+    is_member_of = os.getenv("IS_MEMBER_OF")
+
+    _data = Data(
+        attributes={
+            "eduPersonUniqueId": [edu_person_unique_id],
+            "isMemberOf": [is_member_of],
+        }
+    )
+
+    _context = mock_context
+    backend_name = comanage_config.get("target_backends", [])[0].get("name")
+    _context.target_backend = backend_name
+
+    # Define a mock next callback
+    def mock_next(_context, internal_data):
+        """Mock next callback function"""
+        return {"success": True, "data": internal_data}
+
+    # Assign the mock_next callback as an attribute for testing purposes
+    setattr(microservice, "next", mock_next)
+
+    # Test the process method
+    result = microservice.process(_context, _data)
+    data = result["data"]
+
+    groups = []
+
+    logger.info("Data attributes before: %s", data.attributes)
+
+    is_member_of = data.attributes.get("isMemberOf", [None])[0]
+    if is_member_of:
+        group_prefix = get_backend_config(
+            backend_name,
+            comanage_config.get("target_backends", []),
+            "prefix",
+            backend_name,
+        )
+        logger.info("Groups: %s", is_member_of)
+        is_member_of = is_member_of.split(",")
+        groups = list(map(lambda x: f"{group_prefix}_{x}", is_member_of))
+
+    for group in groups:
+        assert group in data.attributes.get("COmanageGroups", [])
+
+    assert result["success"] is True
+
+    logger.info("Data attributes: %s", data.attributes)
 
 
-# def test_init(microservice, mock_comanage_api):
-#     """Test service initialization."""
-#     assert microservice.api is not None
-#     mock_comanage_api.assert_called_once()
-#     assert microservice.target_backends == [
-#         {"name": "test_backend", "prefix": "prefix"}
-#     ]
+def test_process_no_backend(
+    microservice: COmanageAccountLinkingMicroService,
+    mock_context: Context,
+):
+    """Test process when backend is not in target backends."""
 
+    # Setup mock data with command line arguments
+    @dataclass
+    class Data:
+        """Mock data"""
 
-# def test_process_backend_not_in_target(microservice, mock_user_attributes):
-#     """Test process when backend is not in target backends."""
-#     context = Context()
-#     context.target_backend = "another_backend"
-#     data = MagicMock()
-#     data.attributes = {}
+        attributes: Dict[str, List[str]]
 
-#     with patch.object(COmanageAccountLinkingMicroService, "next") as mock_next:
-#         microservice.process(context, data)
-#         mock_next.assert_called_once()
+    edu_person_unique_id = os.getenv("EDU_PERSON_UNIQUE_ID")
+    is_member_of = os.getenv("IS_MEMBER_OF")
 
+    _data = Data(
+        attributes={
+            "eduPersonUniqueId": [edu_person_unique_id],
+            "isMemberOf": [is_member_of],
+        }
+    )
 
-# def test_process_user_not_found(microservice, mock_user_attributes, mock_comanage_user):
-#     """Test process when user is not found in COmanage."""
-#     mock_comanage_user.side_effect = COmanageAPIError("User not found")
-#     context = Context()
-#     context.target_backend = "test_backend"
-#     data = MagicMock()
-#     data.attributes = {}
+    _context = mock_context
+    _context.target_backend = "non_existent_backend"
 
-#     with patch.object(COmanageAccountLinkingMicroService, "next") as mock_next:
-#         microservice.process(context, data)
-#         mock_next.assert_called_once()
+    # Define a mock next callback
+    def mock_next(_context, internal_data):
+        """Mock next callback function"""
+        return {"success": True, "data": internal_data}
 
+    # Assign the mock_next callback as an attribute for testing purposes
+    setattr(microservice, "next", mock_next)
 
-# def test_process_user_not_active(
-#     microservice, mock_user_attributes, mock_comanage_user
-# ):
-#     """Test process when user is not active in COmanage."""
-#     mock_comanage_user.side_effect = COmanageUserNotActiveError("User not active")
-#     context = Context()
-#     context.target_backend = "test_backend"
-#     data = MagicMock()
-#     data.attributes = {}
+    # Test the process method
+    result = microservice.process(_context, _data)
+    data = result["data"]
 
-#     result = microservice.process(context, data)
-#     assert isinstance(result, SATOSAAuthenticationError)
+    assert data.attributes.get("COmanageUID", None) is None
+    assert data.attributes.get("COmanageUserStatus", None) is None
+    assert data.attributes.get("COmanageGroups", []) == []
+    assert result["success"] is True
 
-
-# def test_process_success(
-#     microservice, mock_user_attributes, mock_comanage_user, mock_comanage_groups
-# ):
-#     """Test successful processing of a user."""
-#     context = Context()
-#     context.target_backend = "test_backend"
-#     data = MagicMock()
-#     data.attributes = {"isMemberOf": ["group1"]}
-
-#     with patch.object(COmanageAccountLinkingMicroService, "next") as mock_next:
-#         microservice.process(context, data)
-#         mock_next.assert_called_once()
-#         assert "COmanageUID" in data.attributes
-#         assert "COmanageUserStatus" in data.attributes
-#         assert "COmanageGroups" in data.attributes
-
-
-# def test_register_groups(microservice, mock_comanage_user, mock_comanage_groups):
-#     """Test group registration."""
-#     microservice.backend = "test_backend"
-#     microservice.group_prefix = "prefix"
-#     comanage_user = mock_comanage_user.return_value
-
-#     microservice.register_groups(["group1", "group3"], comanage_user)
-
-#     mock_groups_instance = mock_comanage_groups.return_value
-#     mock_groups_instance.set_member.assert_called_with(
-#         "prefix_group3", comanage_user.co_person_id
-#     )
-#     mock_groups_instance.remove_member.assert_not_called()
-
-
-# def test_register_groups_with_removal(
-#     microservice, mock_comanage_user, mock_comanage_groups
-# ):
-#     """Test group registration with removal of old groups."""
-#     microservice.backend = "test_backend"
-#     microservice.group_prefix = "prefix"
-#     comanage_user = mock_comanage_user.return_value
-#     comanage_user.get_idp_groups.return_value = {
-#         "prefix_group1": {"Id": "g1"},
-#         "prefix_group2": {"Id": "g2"},
-#     }
-
-#     mock_groups_instance = mock_comanage_groups.return_value
-#     mock_groups_instance.organize_group_members.return_value = {
-#         "g1": "gm1",
-#         "g2": "gm2",
-#     }
-
-#     microservice.register_groups(["group1"], comanage_user)
-
-#     mock_groups_instance.remove_member.assert_called_once_with("gm2")
-#     mock_groups_instance.set_member.assert_not_called()
-
-
-# def test_register_groups_error(microservice, mock_comanage_user, mock_comanage_groups):
-#     """Test error handling in group registration."""
-#     mock_comanage_groups.return_value.get_or_create_group.side_effect = (
-#         COmanageGroupsError("Group error")
-#     )
-#     microservice.backend = "test_backend"
-#     microservice.group_prefix = "prefix"
-#     comanage_user = mock_comanage_user.return_value
-
-#     with pytest.raises(COmanageGroupsError):
-#         microservice.register_groups(["group1"], comanage_user)
+    logger.info("Data attributes: %s", data.attributes)

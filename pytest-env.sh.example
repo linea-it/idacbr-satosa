@@ -1,0 +1,7 @@
+#!/bin/bash
+# This file is part of the SATOSA project.
+
+export PYTHONPATH=$(pwd)/satosa/plugins/microservices/custom:$(pwd)/satosa/plugins/backends/custom
+export COMANAGE_CONFIG=$(pwd)/satosa/plugins/microservices/comanage_account_linking.yaml
+export EDU_PERSON_UNIQUE_ID=
+export IS_MEMBER_OF="group3,group2"

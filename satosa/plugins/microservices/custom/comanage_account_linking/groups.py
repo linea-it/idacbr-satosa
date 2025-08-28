@@ -12,7 +12,7 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional, NoReturn
 
 from .api import COmanageAPI
-from .utils import filter_idp_groups
+from .utils import filter_groups, filter_groups_by_prefix
 
 
 class COmanageGroups:
@@ -30,30 +30,41 @@ class COmanageGroups:
         idp_groups (Dict[str, Dict[str, Any]]): Cached groups filtered by identity provider.
     """
 
-    def __init__(self, api: COmanageAPI, prefix: str) -> NoReturn:
+    def __init__(self, api: COmanageAPI) -> NoReturn:
         """
         Initialize a COmanageGroups instance.
 
         Args:
             api (COmanageAPI): The COmanage API client for performing group operations.
-            prefix (str): The prefix to filter groups.
 
         Initializes the instance with the provided API client and retrieves
         groups filtered by the specified backend.
         """
 
         self.__api = api
-        self.__idp_groups = self.__get_idp_groups(prefix)
+        self.__groups = filter_groups(self.__api.get_groups_by_co())
 
     @property
-    def idp_groups(self) -> Dict[str, Dict[str, Any]]:
-        """Cached groups filtered by identity provider."""
-        return self.__idp_groups
+    def groups(self) -> Dict[str, Dict[str, Any]]:
+        """Get cached groups by co"""
+        return self.__groups
+
+    def groups_by_prefix(self, prefix: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Retrieve and filter groups for a specific prefix group.
+
+        Args:
+            prefix (str): The prefix to filter groups.
+
+        Returns:
+            Dict[str, Dict[str, any]]: A dictionary of groups associated with the prefix group.
+        """
+        return filter_groups_by_prefix(prefix, self.groups)
 
     @lru_cache(maxsize=128)
-    def get_idp_group(self, group_name: str) -> Optional[Dict[str, Any]]:
+    def get_group(self, group_name: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve a specific group from the cached identity provider groups.
+        Retrieve a specific group.
 
         Args:
             group_name (str): The name of the group to retrieve.
@@ -61,7 +72,7 @@ class COmanageGroups:
         Returns:
             Optional[Dict[str, Any]]: The group dictionary if found, otherwise None.
         """
-        return self.idp_groups.get(group_name, None)
+        return self.groups.get(group_name)
 
     def get_or_create_group(self, group_name: str) -> Dict[str, Any]:
         """
@@ -74,7 +85,7 @@ class COmanageGroups:
             Dict[str, Any]: The group dictionary with an additional 'Method' key
             indicating whether the group was retrieved ('GET') or created ('CREATED').
         """
-        group = self.get_idp_group(group_name)
+        group = self.get_group(group_name)
 
         if group:
             group["Method"] = "GET"
@@ -116,20 +127,6 @@ class COmanageGroups:
         """
 
         self.__api.remove_group_member(co_group_member_id)
-
-    def __get_idp_groups(self, prefix: str) -> Dict[str, Dict[str, any]]:
-        """
-        Retrieve and filter groups for a specific prefix group.
-
-        Args:
-            prefix (str): The prefix to filter groups.
-
-        Returns:
-            Dict[str, Dict[str, any]]: A dictionary of groups associated with the prefix group.
-        """
-
-        groups = self.__api.get_groups_by_co()
-        return filter_idp_groups(prefix, groups)
 
     @staticmethod
     def organize_group_members(group_members: List[Dict[str, any]]) -> Dict[str, str]:

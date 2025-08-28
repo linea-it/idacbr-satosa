@@ -1,19 +1,20 @@
-# SATOSA
-LIneA SATOSA proxy configuration and documentation
+# LIneA SATOSA proxy
+
+This repository contains some Satosa customizations for LIneA's needs (mainly in plugins) and files/structures that work as a kind of Satosa backup in our infrastructure, obviously without sensitive information.
 
 ## COmanage Account Linking Plugin
 
 This plugin enables account linking between identity providers and COmanage Registry through SATOSA proxy.
 
-## Installation
+### Installation
 
 1. Add the plugin files to your SATOSA installation:
 
 ```bash
-cp plugins/microservices/comanage_account_linking.py /path/to/satosa/plugins/microservices/
+cp -r satosa/plugins/microservices/custom/comanage_account_linking/ /path/to/satosa/plugins/microservices/
 ```
 
-## Configuration
+### Configuration
 
 1. Add the microservice configuration to your SATOSA proxy configuration file:
 
@@ -32,7 +33,7 @@ MICRO_SERVICES:
      co_id: "2"
 ```
 
-### Configuration Parameters
+#### Configuration Parameters
 
 - `api_url`: COmanage Registry API base URL
 - `api_user`: COmanage API username
@@ -40,14 +41,14 @@ MICRO_SERVICES:
 - `target_backends`: List of SATOSA backends to enable account linking
 - `co_id`: COmanage Organization ID
 
-## Usage
+### Usage
 
 The plugin will:
 1. Automatically create/retrieve COmanage users during authentication
 2. Manage group memberships between identity providers and COmanage
 3. Handle account linking across configured backends
 
-## Error Handling
+#### Error Handling
 
 The plugin includes several error classes for specific scenarios:
 - `COmanageAPIError`: API communication issues
@@ -55,10 +56,26 @@ The plugin includes several error classes for specific scenarios:
 - `COmanageGroupsError`: Group management errors
 - `COmanageAccountLinkingError`: General account linking errors
 
-## Development
+### Development
 
-The plugin is designed to be extensible. Key classes:
-- `COmanageAPI`: Handles API communication
-- `COmanageUser`: Manages user information and status
-- `COmanageAccountLinkingMicroService`: Main plugin logic
+Create a virtualenv:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt`
+```
+
+Copy and edit the files and fill in the values:
+```bash
+cp pytest-env.sh.example pytest-env.sh
+cp satosa/plugins/microservices/comanage_account_linking.yaml.example satosa/plugins/microservices/comanage_account_linking.yaml
+```
+
+#### Run tests
+
+```bash
+source pytest-env.sh
+pytest --log-file=run-test.log --log-file-level=DEBUG
+```
+
 

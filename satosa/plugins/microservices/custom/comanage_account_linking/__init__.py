@@ -8,6 +8,7 @@ and synchronizing group memberships across different identity providers and COma
 
 import logging
 from typing import Any, Dict, List, NoReturn
+from time import sleep
 
 from satosa.context import Context
 from satosa.exception import SATOSAAuthenticationError
@@ -24,7 +25,6 @@ from .groups import COmanageGroups
 from .user import COmanageUser, UserAttributes
 from .utils import get_backend_config
 
-# from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,6 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         super().__init__(*args, **kwargs)
         self.api = COmanageAPI(COmanageConfig(**conf))
         self.target_backends = conf.get("target_backends", [])
-        self.backend = None
-        self.group_prefix = ""
 
     def process(self, context: Context, data) -> Dict[str, Any]:
         """
@@ -82,39 +80,31 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
             AssertionError: If user identifier cannot be extracted.
             COmanageAccountLinkingError: If group synchronization fails.
         """
-        logger.debug("Processing request with context: %s", context)
-
-        self.backend = context.target_backend
-
-        data.attributes["idpName"] = self.backend
-
-        logger.debug("Processing data: %s", data)
-
+        logger.debug("Processing request: %s", context)
+        backend = context.target_backend
+        data.attributes["backendName"] = backend
         user = UserAttributes.from_data(data)
 
-        if not self.backend in [item["name"] for item in self.target_backends]:
-            logger.info("Backend %s not in target backends", self.backend)
+        if not backend in [item["name"] for item in self.target_backends]:
+            logger.info("Backend %s not in target backends", backend)
             data.attributes.update(user.co_manage_user)
             return super().process(context, data)
 
-        self.group_prefix = get_backend_config(
-            self.backend, self.target_backends, "prefix", self.backend
+        group_prefix = get_backend_config(
+            backend, self.target_backends, "prefix", backend
         )
 
         try:
             comanage_user = COmanageUser(user.edu_person_unique_id, self.api)
-            logger.info("COmanage user: %s", comanage_user)
-        except AssertionError as err:
-            logger.warning(err)
-            data.attributes.update(user.co_manage_user)
-            return super().process(context, data)
-        except COmanageAPIError as err:
-            logger.warning(err)
-            data.attributes.update(user.co_manage_user)
-            return super().process(context, data)
         except COmanageUserNotActiveError as err:
-            logger.error(err)
+            logger.exception(err)
             return SATOSAAuthenticationError(context.state, err)
+        except Exception as err:  # pylint: disable=broad-except
+            logger.exception(err)
+            user.co_manage_user["COmanageLogError"] = str(err)
+            user.co_manage_user["COmanageUserStatus"] = "Error"
+            data.attributes.update(user.co_manage_user)
+            return super().process(context, data)
 
         user.co_manage_user["COmanageUID"] = comanage_user.uid
         user.co_manage_user["COmanageUserStatus"] = comanage_user.status
@@ -123,10 +113,16 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
             if user.is_member_of:
                 try:
                     self.register_groups(
-                        idp_groups=user.is_member_of, comanage_user=comanage_user
+                        is_member_of=user.is_member_of,
+                        comanage_user=comanage_user,
+                        group_prefix=group_prefix,
                     )
-                except COmanageGroupsError as err:
-                    logger.error(err)
+                except Exception as err:  # pylint: disable=broad-except
+                    logger.exception(err)
+                    user.co_manage_user["COmanageLogError"] = str(err)
+                    user.co_manage_user["COmanageUserStatus"] = "Error"
+                    data.attributes.update(user.co_manage_user)
+                    return super().process(context, data)
 
             cogroups = comanage_user.get_groups()
             user.co_manage_user["COmanageGroups"] = list(cogroups.keys())
@@ -135,7 +131,10 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         return super().process(context, data)
 
     def register_groups(
-        self, idp_groups: List[str], comanage_user: COmanageUser
+        self,
+        is_member_of: List[str],
+        comanage_user: COmanageUser,
+        group_prefix: str = "",
     ) -> Dict[str, Any]:
         """
         Synchronize groups for a COmanage user across an identity provider and COmanage.
@@ -145,137 +144,59 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         present in the identity provider's group list.
 
         Args:
-            idp_groups (List[str]): Groups from the identity provider.
+            is_member_of (List[str]): Groups from the identity provider.
             comanage_user (COmanageUser): The COmanage user being processed.
 
         Returns:
             Dict[str, Any]: Dictionary containing the user's group memberships.
         """
-        comanage_groups = COmanageGroups(self.api, self.group_prefix)
+        comanage_groups = COmanageGroups(self.api)
 
-        idp_groups_user = {}
+        groups_user = {}
 
-        for group in idp_groups:
-            idp_group_name = f"{self.group_prefix}_{group}"
-            idp_group = comanage_groups.get_or_create_group(idp_group_name)
+        # Iterate over the identity provider groups and ensure they exist in COmanage
+        for group in is_member_of:
+            sleep(0.05)  # To avoid hitting the API rate limit
+            group_name = f"{group_prefix}_{group}"
+            group = comanage_groups.get_or_create_group(group_name)
 
             logger.debug(
                 "Group %s: %s - %s",
-                idp_group_name,
-                idp_group["Id"],
-                idp_group["Method"],
+                group_name,
+                group["Id"],
+                group["Method"],
             )
 
-            idp_groups_user[idp_group_name] = {
-                "Id": idp_group["Id"],
-                "Method": idp_group["Method"],
+            groups_user[group_name] = {
+                "Id": group["Id"],
+                "Method": group["Method"],
             }
 
-        logger.info("--> IDP user groups with prefix: %s", idp_groups_user)
+        logger.debug("User %s groups: %s", comanage_user.uid, groups_user)
 
-        com_group_members_user = comanage_groups.organize_group_members(
+        # Get the current group membership from COmanage
+        group_members = comanage_groups.organize_group_members(
             comanage_user.get_group_members()
         )
 
-        logger.info("--> COMANAGER group members by user: %s", com_group_members_user)
+        # Get the groups associated with the user that match the identity provider prefix
+        cmn_groups_with_prefix = comanage_user.get_groups_by_prefix(group_prefix)
 
-        com_groups_user = comanage_user.get_idp_groups(self.group_prefix)
-
-        logger.info("--> COMANAGER group by user: %s", com_groups_user)
-
-        for idp_group, _data in com_groups_user.items():
-            if idp_group not in idp_groups_user:
-                logger.debug("Group %s not found in idp groups", idp_group)
-                logger.debug("Removing group %s from user", idp_group)
-                group_member_id = com_group_members_user[_data["Id"]]
+        # Remove groups that are no longer present in the identity provider's group list
+        for cmn_group, group in cmn_groups_with_prefix.items():
+            sleep(0.05)  # To avoid hitting the API rate limit
+            if cmn_group not in groups_user:
+                logger.debug("Group %s not found in IDP groups", cmn_group)
+                logger.debug("Removing group %s from user", cmn_group)
+                group_member_id = group_members[group["Id"]]
                 comanage_groups.remove_member(group_member_id)
 
-        for group_name, _data in idp_groups_user.items():
-            if group_name not in com_groups_user:
+        # Add new groups from the identity provider to the COmanage user
+        for group_name, group in groups_user.items():
+            sleep(0.05)  # To avoid hitting the API rate limit
+            if group_name not in cmn_groups_with_prefix:
                 logger.debug("Group %s not found in comanage groups", group_name)
                 logger.debug("Adding group %s to user", group_name)
-                comanage_groups.set_member(_data["Id"], comanage_user.co_person_id)
+                comanage_groups.set_member(group["Id"], comanage_user.co_person_id)
 
-        return idp_groups_user
-
-
-if __name__ == "__main__":
-    import argparse
-    from dataclasses import dataclass
-
-    import yaml
-
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    parser = argparse.ArgumentParser(
-        description="""Test COmanage Account Linking microservice functionality.
-
-        This script provides a command-line interface to test the COmanageAccountLinkingMicroService
-        by simulating a user authentication and group membership process. It allows manual testing
-        of account linking with configurable parameters.
-
-        Requires:
-            - YAML configuration file
-            - eduPersonUniqueId
-            - Space-separated list of group memberships"""
-    )
-    parser.add_argument(
-        "--config", type=str, required=True, help="Path to YAML config file"
-    )
-    parser.add_argument(
-        "--edu-person-unique-id",
-        type=str,
-        required=True,
-        help="eduPersonUniqueId value",
-    )
-    parser.add_argument(
-        "--is-member-of",
-        type=str,
-        required=True,
-        help="Space-separated list of group memberships",
-    )
-    _args = parser.parse_args()
-
-    with open(_args.config, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-        config = config["config"]
-
-    # Setup mock data with command line arguments
-    @dataclass
-    class Data:
-        """Mock data"""
-
-        attributes: Dict[str, List[str]]
-
-    _data = Data(
-        attributes={
-            "eduPersonUniqueId": [_args.edu_person_unique_id],
-            "isMemberOf": [_args.is_member_of],
-        }
-    )
-
-    # Mock context
-    _context = Context()
-    _context.target_backend = "rubin_oidc"
-
-    # Define a mock next callback
-    def mock_next(_context, internal_data):
-        """Mock next callback function"""
-        return {"success": True, "data": internal_data}
-
-    # Initialize the service
-    service = COmanageAccountLinkingMicroService(
-        config,
-        name="comanage_account_linking",
-        base_url=config.get("api_url"),
-    )
-
-    # Assign the mock_next callback as an attribute for testing purposes
-    setattr(service, "next", mock_next)
-
-    # Test the process method
-    result = service.process(_context, _data)
-    print(f"Result: {result}")
+        return groups_user

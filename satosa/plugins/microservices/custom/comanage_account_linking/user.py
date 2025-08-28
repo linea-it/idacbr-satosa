@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, NoReturn, Optional
 
 from .api import COmanageAPI
-from .utils import filter_groups, filter_idp_groups
+from .utils import filter_groups, filter_groups_by_prefix
 from .exceptions import COmanageUserNotActiveError
 
 logger = logging.getLogger(__name__)
@@ -69,16 +69,27 @@ class COmanageUser:
         co_people = self.api.get_co_people(self.co_person_id)
         self.__status = co_people.get("Status", "NotFound")
 
+        self.__ldap_uid = self.get_ldap_uid()
+        logger.debug("User %s is %s", self.uid, self.__status)
+
+    def get_ldap_uid(self) -> str:
+        """
+        Retrieve the LDAP UID of the COmanage user.
+        Returns:
+            str: The LDAP UID of the user.
+        Raises:
+            COmanageUserNotActiveError: If the user is not active.
+        """
+
         if not self.is_active:
-            if not self.status in PENDING_USER_STATUS:
+            if self.status not in PENDING_USER_STATUS:
                 raise COmanageUserNotActiveError(
                     f"COPERSON ID {self.co_person_id} is not active"
                 )
-            self.__ldap_uid = None
-        else:
-            identifier_uid = self.__get_identifier_uid()
-            self.__ldap_uid = identifier_uid.get("Identifier")
-            logger.debug("User %s is %s", self.uid, self.__status)
+            return None
+
+        identifier_uid = self.__get_identifier_uid()
+        return identifier_uid.get("Identifier")
 
     @property
     def is_active(self) -> bool:
@@ -148,16 +159,6 @@ class COmanageUser:
         )
         return None
 
-    def __get_groups(self) -> List[Dict[str, any]]:
-        """
-        Retrieve the list of groups associated with the COmanage user.
-
-        Returns:
-            List[Dict[str, any]]: A list of groups the user belongs to in COmanage,
-            retrieved using the user's COmanage person ID.
-        """
-        return self.api.get_groups_by_copersonid(self.co_person_id)
-
     def get_groups(self) -> List[Dict[str, any]]:
         """
         Retrieve the groups associated with the COmanage user.
@@ -166,9 +167,11 @@ class COmanageUser:
             List[Dict[str, any]]: A list of groups the user belongs to in COmanage,
             retrieved using the user's COmanage person ID.
         """
-        return filter_groups(self.__get_groups())
 
-    def get_idp_groups(self, prefix) -> List[Dict[str, any]]:
+        groups = self.api.get_groups_by_copersonid(self.co_person_id)
+        return filter_groups(groups)
+
+    def get_groups_by_prefix(self, prefix) -> List[Dict[str, any]]:
         """
         Retrieve the groups associated with a specific identity provider (IdP)
         for the COmanage user.
@@ -180,8 +183,8 @@ class COmanageUser:
             List[Dict[str, any]]: A filtered list of groups that match the
             specified identity provider.
         """
-        groups = self.__get_groups()
-        return filter_idp_groups(prefix, groups)
+        groups = self.api.get_groups_by_copersonid(self.co_person_id)
+        return filter_groups_by_prefix(prefix, groups)
 
     def get_group_members(self) -> List[Dict[str, any]]:
         """
@@ -220,6 +223,7 @@ class UserAttributes:
             "COmanageUID": None,
             "COmanageUserStatus": None,
             "COmanageGroups": [],
+            "COmanageLogError": None,
         }
     )
 
@@ -241,5 +245,5 @@ class UserAttributes:
         attributes = _data.attributes
         return cls(
             edu_person_unique_id=attributes.get("eduPersonUniqueId", [""])[0],
-            is_member_of=attributes.get("isMemberOf", [""])[0].split(),
+            is_member_of=attributes.get("isMemberOf", [""])[0].split(","),
         )
