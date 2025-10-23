@@ -1,0 +1,121 @@
+attributes:
+  address:
+    openid: [address.street_address]
+    orcid: [addresses.str]
+    saml: [postaladdress]
+  displayName:
+    openid: [name, preferred_username]
+    orcid: [name.credit-name]
+    github: [name]
+    saml: [displayName]
+  eduPersonTargetedID:
+    facebook: [id]
+    linkedin: [id]
+    orcid: [orcid]
+    openid: [eptid]
+    saml: [eduPersonTargetedID, ePTID, eptid]
+  eduPersonUniqueId:
+    openid: [sub]
+    github: [login]
+    facebook: [id]
+    saml: [eduPersonUniqueId, eduPersonPrincipalName]
+  nickname:
+    oidc: [nickname]
+    saml: [eduPersonNickname, ePN]
+  eduPersonPrincipalName:
+    facebook: [id]
+    linkedin: [id]
+    orcid: [orcid]
+    github: [login]
+    openid: [eppn]
+    saml: [eduPersonPrincipalName, eppn, ePPN]
+  givenName:
+    facebook: [first_name]
+    linkedin: [email-address]
+    orcid: [name.given-names.value]
+    openid: [given_name]
+    saml: [givenName, gn]
+    gihub: [name]
+  mail:
+    facebook: [email]
+    linkedin: [email-address]
+    orcid: [emails.str]
+    github: [email]
+    openid: [email]
+    saml: [email, emailAdress, mail]
+  cn:
+    facebook: [name]
+    orcid: [name.credit-name]
+    github: [name]
+    openid: [name, preferred_username]
+    saml: [cn, commonName]
+  surName:
+    facebook: [last_name]
+    linkedin: [lastName]
+    orcid: [name.family-name.value]
+    openid: [family_name, preferred_username]
+    saml: [sn, surName]
+    github: [login]
+  name_id:
+    github: [login]
+  brEduAffiliationType:
+    openid: [affiliation]
+    saml: [brEduAffiliationType, braff]
+  eduPersonAffiliation:
+    openid: [affiliation]
+    saml: [eduPersonAffiliation, ePA]
+  eduPersonEntitlement:
+    openid: [entitlement]
+    saml: [eduPersonEntitlement, ePE]
+  brPersonCPF:
+    openid: [cpf]
+    saml: [brPersonCPF, brpersoncpf]
+  schacDateOfBirth:
+    openid: [birthdate]
+    saml: [schacDateOfBirth]
+  sn:
+    github: [login]
+    openid: [family_name, preferred_username]
+    saml: [sn, surName]
+  backendName:
+    openid: [schacProjectMembership]
+    github: [schacProjectMembership]
+    saml: [schacProjectMembership]
+    # saml: [o]
+  idp_entityID:
+    openid: [idp]
+    saml: [schacHomeOrganization]
+  subject_id:
+    openid: [subject_id]
+    saml: [subject_id]
+  pairwise_id:
+    openid: [pairwise_id]
+    saml: [pairwise_id]
+  isMemberOf:
+    openid: [isMemberOf, data_rights]
+    saml: [isMemberOf]
+  eduPersonAssurance:
+    openid: [eduPersonAssurance]
+    saml: [eduPersonAssurance]
+  eduPersonOrcid:
+    openid: [eduPersonOrcid]
+    saml: [eduPersonOrcid]
+  external_sub:
+    openid: [oidc]
+    saml: [oidcExternalSub]
+  COmanageGroups:
+    openid: [member]
+    github: [member]
+    saml: [member]
+  COmanageUID:
+    openid: [uid]
+    github: [uid]
+    saml: [uid]
+  COmanageUserStatus:
+    openid: [schacUserStatus, user_status]
+    github: [schacUserStatus, user_status]
+    saml: [schacUserStatus]
+  COmanageLogError:
+    openid: [knowledgeInformation]
+    github: [knowledgeInformation]
+    saml: [knowledgeInformation]

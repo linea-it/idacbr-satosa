@@ -1,0 +1,11 @@
+services:
+  satosa:
+    container_name: satosa
+    image: linea/satosa:8.5.1
+    env_file:
+      - .env
+    user: "${USERID}:${GID}"
+    volumes:
+      - ./satosa:/etc/satosa
+    ports:
+      - 8184:8080

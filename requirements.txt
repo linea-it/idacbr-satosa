@@ -1,2 +1,4 @@
-tenacity
 satosa
+pyyaml
+pytest
+pytest-mock

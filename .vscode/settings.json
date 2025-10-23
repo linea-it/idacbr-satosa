@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./satosa/plugins/microservices/custom/",
+        "./satosa/plugins/backends/custom/",
+    ],
+}

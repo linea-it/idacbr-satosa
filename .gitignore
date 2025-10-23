@@ -1,3 +1,7 @@
 *.yaml
 *.pyc
 __pycache__
+.pytest_cache
+pytest-env.sh
+*.log
+.env

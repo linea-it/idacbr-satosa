@@ -1,0 +1,44 @@
+module: cilogon.OpenIDConnectCustomBackend
+name:  rubin_oidc
+config:
+  provider_metadata:
+    issuer:
+    authorization_endpoint:
+    token_endpoint:
+    userinfo_endpoint:
+    jwks_uri:
+  client:
+    verify_ssl: yes
+    auth_req_params:
+      response_type: code
+      scope: [openid, profile, email, rubin]
+      skew: 5
+    client_metadata:
+      application_name: LIneA Services
+      application_type: web
+      contacts: []
+      client_id:
+      client_secret:
+      redirect_uris: [<base_url>/<name>]
+      subject_type: public
+  entity_info:
+    contact_person:
+      - contact_type: "technical"
+        email_address: []
+        given_name:
+        sur_name:
+      - contact_type: "support"
+        email_address: ["helpdesk@linea.org.br"]
+        given_name: "Support"
+    organization:
+      display_name:
+      - ["LIneA Services", "en"]
+      name:
+      - ["Interinstitutional e-Astronomy Laboratory", "en"]
+      url:
+      - ["https://linea.org.br", "en"]
+    ui_info:
+      description:
+      - ["Interinstitutional e-Astronomy Laboratory", "en"]
+      display_name:
+      - ["LIneA Services", "en"]

@@ -1,0 +1,2 @@
+docker-compose exec -it satosa /bin/bash
+satosa-saml-metadata proxy_conf.yaml keys/frontends/saml-mirror.key keys/frontends/saml-mirror.crt --dir metadatas/ --split-frontend
