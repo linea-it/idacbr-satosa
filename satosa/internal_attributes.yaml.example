@@ -81,7 +81,9 @@ attributes:
     openid: [schacProjectMembership]
     github: [schacProjectMembership]
     saml: [schacProjectMembership]
-    # saml: [o]
+  idp_name:
+    openid: [idp_name]
+    saml: [o]
   idp_entityID:
     openid: [idp]
     saml: [schacHomeOrganization]
