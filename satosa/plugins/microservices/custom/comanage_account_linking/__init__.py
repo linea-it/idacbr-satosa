@@ -17,8 +17,7 @@ from satosa.micro_services.base import ResponseMicroService
 from .api import COmanageAPI
 from .config import COmanageConfig
 from .exceptions import (
-    COmanageAPIError,
-    COmanageGroupsError,
+    COmanageUserNonLIneAError,
     COmanageUserNotActiveError,
 )
 from .groups import COmanageGroups
@@ -99,6 +98,12 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         except COmanageUserNotActiveError as err:
             logger.exception(err)
             return SATOSAAuthenticationError(context.state, err)
+        except COmanageUserNonLIneAError as err:
+            logger.exception(err)
+            user.co_manage_user["COmanageLogError"] = str(err)
+            user.co_manage_user["COmanageUserStatus"] = "NonLIneA"
+            data.attributes.update(user.co_manage_user)
+            return super().process(context, data)
         except Exception as err:  # pylint: disable=broad-except
             logger.exception(err)
             user.co_manage_user["COmanageLogError"] = str(err)

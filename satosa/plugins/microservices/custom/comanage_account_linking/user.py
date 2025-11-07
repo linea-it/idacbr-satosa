@@ -11,7 +11,7 @@ from typing import Dict, List, NoReturn, Optional
 
 from .api import COmanageAPI
 from .utils import filter_groups, filter_groups_by_prefix
-from .exceptions import COmanageUserNotActiveError
+from .exceptions import COmanageUserNotActiveError, COmanageUserNonLIneAError
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +58,19 @@ class COmanageUser:
         """
 
         self.__api = api
-        self.__co_person_id = self.api.get_co_person_id(identifier)
+        try:
+            self.__co_person_id = self.api.get_co_person_id(identifier)
+        except Exception as e:
+            raise COmanageUserNonLIneAError(
+                f"Error retrieving CO Person ID for identifier {identifier}: {e}"
+            ) from e
 
         logger.debug("User %s has co_person_id %s", identifier, self.co_person_id)
 
-        assert (
-            self.co_person_id
-        ), f"No matching user found in COmanage (identifier: {identifier})"
+        if not self.co_person_id:
+            raise COmanageUserNonLIneAError(
+                f"No matching user found in COmanage (identifier: {identifier})"
+            )
 
         co_people = self.api.get_co_people(self.co_person_id)
         self.__status = co_people.get("Status", "NotFound")
