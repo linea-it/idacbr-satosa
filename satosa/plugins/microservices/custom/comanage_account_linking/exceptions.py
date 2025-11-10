@@ -11,6 +11,10 @@ class COmanageUserNotActiveError(Exception):
     """Custom exception for COmanage user errors"""
 
 
+class COmanageUserNonLIneAError(Exception):
+    """Custom exception for COmanage user errors"""
+
+
 class COmanageGroupsError(Exception):
     """Custom exception for COmanage groups errors"""
 
