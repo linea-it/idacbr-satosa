@@ -371,6 +371,25 @@ class COmanageAPI:
 
         return _data.get("CoGroups", None)
 
+    def get_unix_cluster_groups(
+        self, unix_cluster_id: int
+    ) -> List[Dict[str, Any]]:
+        """Retrieve the CO Groups associated with a Unix Cluster.
+
+        Args:
+            unix_cluster_id (int): UnixCluster plugin record ID. This is not the
+                generic COmanage Cluster ID.
+
+        Returns:
+            List[Dict[str, Any]]: Unix Cluster Group association records.
+        """
+        _data = self.get_request(
+            "registry/unix_cluster/unix_cluster_groups.json",
+            {"unix_cluster_id": unix_cluster_id},
+        )
+
+        return _data.get("UnixClusterGroups", [])
+
     def add_group(self, group_name) -> Dict[str, Any]:
         """Create a new group in COmanage with the specified group name.
 
@@ -393,6 +412,28 @@ class COmanageAPI:
         _data["Id"] = response["Id"]
 
         return _data
+
+    def add_unix_cluster_group(
+        self, unix_cluster_id: int, co_group_id: int
+    ) -> Dict[str, Any]:
+        """Associate a CO Group with a Unix Cluster.
+
+        Args:
+            unix_cluster_id (int): UnixCluster plugin record ID.
+            co_group_id (int): CO Group ID to associate with the Unix Cluster.
+
+        Returns:
+            Dict[str, Any]: COmanage API response for the new association.
+        """
+        _data = {
+            "Version": "1.0",
+            "UnixClusterId": unix_cluster_id,
+            "CoGroupId": co_group_id,
+        }
+
+        return self.post_request(
+            "registry/unix_cluster/unix_cluster_groups.json", _data
+        )
 
     def add_group_member(self, co_group_id: int, co_person_id: int) -> Dict[str, Any]:
         """Add a member to a COmanage group.

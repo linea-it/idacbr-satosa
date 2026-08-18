@@ -28,9 +28,11 @@ MICRO_SERVICES:
       password: "api_password"
       target_backends:
         - name: "oidc"
+          unix_cluster_id: 7
         - name: "saml2"
           prefix: "custom_saml2"
-     co_id: "2"
+          unix_cluster_id: 7
+      co_id: "2"
 ```
 
 #### Configuration Parameters
@@ -39,14 +41,19 @@ MICRO_SERVICES:
 - `api_user`: COmanage API username
 - `password`: COmanage API password
 - `target_backends`: List of SATOSA backends to enable account linking
+  - `name`: SATOSA backend name
+  - `prefix`: Optional prefix applied to synchronized CO Groups
+  - `unix_cluster_id`: UnixCluster plugin record ID (`cm_unix_clusters.id`),
+    required to associate synchronized groups with the POSIX Unix Cluster
 - `co_id`: COmanage Organization ID
 
 ### Usage
 
 The plugin will:
 1. Automatically create/retrieve COmanage users during authentication
-2. Manage group memberships between identity providers and COmanage
-3. Handle account linking across configured backends
+2. Associate synchronized groups with the configured COmanage Unix Cluster
+3. Manage group memberships between identity providers and COmanage
+4. Handle account linking across configured backends
 
 #### Error Handling
 
@@ -77,5 +84,3 @@ cp satosa/plugins/microservices/comanage_account_linking.yaml.example satosa/plu
 source pytest-env.sh
 pytest --log-file=run-test.log --log-file-level=DEBUG
 ```
-
-

@@ -7,4 +7,6 @@ config:
   target_backends:
     - name: "rubin_oidc"
       prefix: "lsst"
+      # UnixCluster plugin record ID (cm_unix_clusters.id), not cm_clusters.id
+      unix_cluster_id: 7
   co_id:
