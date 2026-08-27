@@ -218,9 +218,43 @@ Repita o teste adicionando e removendo um usuário do grupo. O atributo
 ## Observações operacionais
 
 - O plugin sincroniza grupos e membros, mas não exclui o próprio CoGroup.
-- Para excluir um grupo administrativamente, use temporariamente o
-  `Manual Mode`, remova o grupo e retorne o target ao `Queue Mode`.
-- Uma entrada antiga criada como `groupOfNames` deve ser removida e
-  reprovisionada como `posixGroup`.
 - Se o provedor de identidade continuar enviando um grupo excluído, o plugin
   poderá criá-lo novamente.
+
+### Exclusão de grupos
+
+A exclusão deve ser feita de forma administrativa. Antes de começar, confirme
+que não existem jobs pendentes ou em execução para o grupo.
+
+1. Altere o LDAP Provisioning Target de `Queue Mode` para `Manual Mode`.
+2. Consulte a entrada no LDAP e anote seu DN e sua `objectClass`.
+3. Exclua o grupo no COmanage.
+4. Como o target está em modo manual, exclua separadamente a entrada no LDAP.
+5. Confirme que o grupo não existe mais no COmanage nem no LDAP.
+6. Retorne o provisioning target ao `Queue Mode`.
+
+Exemplo de consulta antes da exclusão:
+
+```bash
+ldapsearch -LLL -x \
+  -H 'ldap://SERVIDOR_LDAP' \
+  -D 'BIND_DN' \
+  -W \
+  -b 'ou=groups,dc=linea,dc=org' \
+  '(cn=lsst_grupo)' \
+  dn objectClass
+```
+
+Depois de conferir o DN exato, remova somente essa entrada:
+
+```bash
+ldapdelete -x \
+  -H 'ldap://SERVIDOR_LDAP' \
+  -D 'BIND_DN' \
+  -W \
+  'cn=lsst_grupo,ou=groups,dc=linea,dc=org'
+```
+
+Se já existir um job de exclusão na fila, ele deve ser tratado antes da remoção
+do CoGroup. Um job que referencie um grupo já apagado pode falhar por não
+conseguir mais obter os dados usados para montar o DN LDAP.
