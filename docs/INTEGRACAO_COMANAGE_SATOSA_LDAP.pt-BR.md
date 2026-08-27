@@ -48,29 +48,6 @@ Não use `groupOfNames` nesse target. Esse modelo representa membros por DN,
 enquanto a integração precisa de `gidNumber` e `memberUid` para uso em
 sistemas Unix/Linux.
 
-### API User
-
-O API User utilizado pelo SATOSA precisa consultar pessoas e identificadores e
-gerenciar:
-
-- CoGroups;
-- CoGroupMembers;
-- UnixClusterGroups.
-
-As credenciais devem permanecer fora do repositório.
-
-### Teste inicial
-
-Antes de integrar o SATOSA:
-
-1. Crie um grupo em `Regular Groups`.
-2. Associe-o ao cluster em `Manage Unix Cluster Groups`.
-3. Adicione um usuário ativo ao grupo.
-4. Execute `Provision` em `Provisioned Services`.
-5. Confirme no LDAP a criação do `posixGroup` com GID e membros.
-
-Esse teste confirma que o COmanage, o Unix Cluster e o LDAP Provisioner estão
-configurados corretamente.
 
 ## 2. Alteração do plugin SATOSA
 
@@ -79,7 +56,7 @@ membros. Foi acrescentada a associação automática de cada grupo ao Unix
 Cluster.
 
 Essa associação corresponde à ação manual executada em
-`Manage Unix Cluster Groups` e é necessária para o provisionamento POSIX.
+`Manage Unix Cluster Groups` e é necessária para o provisionamento.
 
 ### Configuração
 
