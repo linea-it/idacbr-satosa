@@ -7,7 +7,7 @@ and synchronizing group memberships across different identity providers and COma
 """
 
 import logging
-from typing import Any, Dict, List, NoReturn
+from typing import Any, Dict, List, NoReturn, Optional
 from time import sleep
 
 from satosa.context import Context
@@ -17,6 +17,7 @@ from satosa.micro_services.base import ResponseMicroService
 from .api import COmanageAPI
 from .config import COmanageConfig
 from .exceptions import (
+    COmanageGroupsError,
     COmanageUserNonLIneAError,
     COmanageUserNotActiveError,
 )
@@ -92,6 +93,9 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         group_prefix = get_backend_config(
             backend, self.target_backends, "prefix", backend
         )
+        unix_cluster_id = get_backend_config(
+            backend, self.target_backends, "unix_cluster_id"
+        )
 
         try:
             comanage_user = COmanageUser(user.edu_person_unique_id, self.api)
@@ -121,6 +125,7 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
                         is_member_of=user.is_member_of,
                         comanage_user=comanage_user,
                         group_prefix=group_prefix,
+                        unix_cluster_id=unix_cluster_id,
                     )
                 except Exception as err:  # pylint: disable=broad-except
                     logger.exception(err)
@@ -140,6 +145,7 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         is_member_of: List[str],
         comanage_user: COmanageUser,
         group_prefix: str = "",
+        unix_cluster_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Synchronize groups for a COmanage user across an identity provider and COmanage.
@@ -151,11 +157,31 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
         Args:
             is_member_of (List[str]): Groups from the identity provider.
             comanage_user (COmanageUser): The COmanage user being processed.
+            group_prefix (str): Prefix applied to groups from the identity provider.
+            unix_cluster_id (Optional[int]): UnixCluster plugin record ID used for
+                POSIX group provisioning.
 
         Returns:
             Dict[str, Any]: Dictionary containing the user's group memberships.
         """
-        comanage_groups = COmanageGroups(self.api)
+        if unix_cluster_id is None:
+            raise COmanageGroupsError(
+                "unix_cluster_id is required to synchronize POSIX groups"
+            )
+
+        try:
+            unix_cluster_id = int(unix_cluster_id)
+        except (TypeError, ValueError) as err:
+            raise COmanageGroupsError(
+                "unix_cluster_id must be a positive integer"
+            ) from err
+
+        if unix_cluster_id <= 0:
+            raise COmanageGroupsError(
+                "unix_cluster_id must be a positive integer"
+            )
+
+        comanage_groups = COmanageGroups(self.api, unix_cluster_id)
 
         groups_user = {}
 
@@ -164,12 +190,18 @@ class COmanageAccountLinkingMicroService(ResponseMicroService):
             sleep(0.05)  # To avoid hitting the API rate limit
             group_name = f"{group_prefix}_{group}"
             group = comanage_groups.get_or_create_group(group_name)
+            association_created = comanage_groups.ensure_unix_cluster_group(
+                group["Id"]
+            )
 
-            logger.debug(
-                "Group %s: %s - %s",
+            logger.info(
+                "Group %s: id=%s method=%s unix_cluster_id=%s "
+                "association_created=%s",
                 group_name,
                 group["Id"],
                 group["Method"],
+                unix_cluster_id,
+                association_created,
             )
 
             groups_user[group_name] = {
